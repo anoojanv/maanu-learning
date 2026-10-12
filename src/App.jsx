@@ -19,6 +19,7 @@ import { Offscreen } from './screens/Offscreen.jsx'
 const fresh = () => ({ v: 2, muted: false, progress: {}, stars: {}, plans: {}, levels: {} })
 const blankPlan = () => ({ unit: 0, sessions: {}, today: { date: '', step: 0, completed: false } })
 const SAVE_DELAY = 1000
+const totalStars = (s) => Object.values(s.stars || {}).reduce((t, n) => t + (n || 0), 0)
 
 /**
  * Bring saved state up to date. Version 1 stored each child's unit as a
@@ -65,12 +66,15 @@ export default function App() {
     loadState()
       .then(async (remote) => {
         if (!live) return
-        if (remote) {
+        // Keep whichever copy has earned more stars, so a new or wiped device
+        // can never overwrite the kids' real progress with an empty save.
+        const local = ref.current
+        if (remote && totalStars(migrate(remote)) >= totalStars(local)) {
           const st = migrate(remote)
           ref.current = st
           setState(st)
-        } else {
-          await saveState(ref.current)
+        } else if (totalStars(local) > 0 || !remote) {
+          await saveState(local)
         }
         if (live) setSynced(true)
       })
