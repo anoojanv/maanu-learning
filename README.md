@@ -33,16 +33,18 @@ npm run dev      # http://localhost:5173
 npm run build    # static site in dist/
 ```
 
-A grown-up signs in once per device, with email and password or an email link. An MA-learning account works too. Progress is saved to Supabase and follows the kids between devices, with a copy kept in the browser. The first sign-in uploads whatever progress the device already had.
+There is no login. Progress is saved to Supabase and follows the kids between devices, with a copy kept in the browser. The first device to open the app uploads whatever progress it already had.
 
-`.env` holds the Supabase URL and publishable key. Both are meant to be public. Row-level security keeps each family's rows private.
+`.env` holds the Supabase URL, the publishable key and the household key. None of them are secrets: anyone who opens the site could find them in its code. The household key only stops casual access. It doesn't keep out someone determined, which is acceptable for first names and scores.
 
 ## Supabase
 
-The data lives in the MA-learning Supabase project (`lgfsihzhqxdglzhbbzrj`), in its own tables (see `supabase/migrations/`):
+The data lives in the MA-learning Supabase project (`lgfsihzhqxdglzhbbzrj`). See `supabase/migrations/`:
 
-- `maanu_state`: one row per family holding the whole app state (stars, Star Meters, unit progress).
-- `maanu_answers`: one row per answered question, for the weekly view.
+- `maanu_household`: one row holding the whole app state (stars, Star Meters, unit progress).
+- `maanu_household_answers`: one row per answered question, for the weekly view.
+
+Both tables are closed to the public key. The app reaches them only through `maanu_load`, `maanu_save`, `maanu_log_answer` and `maanu_recent_answers`, which require the household key and only work for a household that already exists. `maanu_state` and `maanu_answers` are left over from the earlier sign-in version and are unused.
 
 ## Where things live
 
@@ -68,6 +70,6 @@ Add an entry to `SKILLS` in `src/data/skills.js` with the `levels` it belongs to
 
 `netlify.toml` builds with `npm run build` and publishes `dist/`.
 
-Netlify needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` set as environment variables, because `.env` is not uploaded.
+Netlify needs `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` and `VITE_MAANU_HOUSEHOLD_KEY` set as environment variables, because `.env` is not uploaded.
 
 No sound files, images or trackers: speech uses the browser's built-in voice, sound effects are synthesised, and drawings are SVG.

@@ -4,9 +4,7 @@ import { SKILL_BY_ID, freeParams } from './data/skills.js'
 import { applyResult } from './lib/mastery.js'
 import { load, save, todayKey } from './lib/storage.js'
 import { setMuted, speak, sfx } from './lib/audio.js'
-import { supabase } from './lib/supabase.js'
 import { loadState, saveState, recordAnswer } from './lib/cloud.js'
-import { Auth } from './screens/Auth.jsx'
 import { Mascot } from './components/Mascot.jsx'
 import { Backdrop } from './components/Backdrop.jsx'
 import { Confetti, rain } from './components/Confetti.jsx'
@@ -56,23 +54,13 @@ export default function App() {
   ref.current = state
   const [view, setView] = useState({ name: 'who' })
   const [news, setNews] = useState({})
-  const [session, setSession] = useState(undefined) // undefined while checking
-  const [synced, setSynced] = useState(false) // cloud state loaded for this session
+  const [synced, setSynced] = useState(false) // cloud state loaded
   const [syncNote, setSyncNote] = useState(null)
   const saveTimer = useRef()
 
+  // Load the household's saved progress. The first time, upload what this
+  // device already has so nothing the kids earned is lost.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
-    return () => data.subscription.unsubscribe()
-  }, [])
-
-  // On sign-in, load the family's saved progress. The first time, upload what
-  // this device already has so nothing the kids earned is lost.
-  const userId = session?.user?.id
-  useEffect(() => {
-    setSynced(false)
-    if (!userId) return
     let live = true
     loadState()
       .then(async (remote) => {
@@ -92,7 +80,7 @@ export default function App() {
         setSynced(true)
       })
     return () => { live = false }
-  }, [userId])
+  }, [])
 
   const flush = useCallback(() => {
     clearTimeout(saveTimer.current)
@@ -107,22 +95,16 @@ export default function App() {
   useEffect(() => {
     save(state)
     setMuted(state.muted)
-    if (!userId || !synced) return
+    if (!synced) return
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(flush, SAVE_DELAY)
-  }, [state, userId, synced, flush])
+  }, [state, synced, flush])
 
   useEffect(() => {
-    const onHide = () => document.visibilityState === 'hidden' && userId && synced && flush()
+    const onHide = () => document.visibilityState === 'hidden' && synced && flush()
     document.addEventListener('visibilitychange', onHide)
     return () => document.removeEventListener('visibilitychange', onHide)
-  }, [userId, synced, flush])
-
-  const signOut = async () => {
-    await flush()
-    await supabase.auth.signOut()
-    setView({ name: 'who' })
-  }
+  }, [synced, flush])
 
   const commit = (fn) => {
     const ns = fn(ref.current)
@@ -203,24 +185,20 @@ export default function App() {
   const toggleMute = () => commit((s) => ({ ...s, muted: !s.muted }))
 
   let body
-  if (session === undefined || (session && !synced)) {
+  if (!synced) {
     body = (
       <div className="screen loading">
         <Mascot mood="wave" size={96} />
         <p>Getting things ready…</p>
       </div>
     )
-  } else if (!session) {
-    body = <Auth />
   } else if (view.name === 'who' || !learner) {
     body = (
       <Who
         learners={LEARNERS}
         stars={state.stars}
         plans={state.plans}
-        email={session.user.email}
         note={syncNote}
-        onSignOut={signOut}
         onPick={(pid) => {
           sfx.tap()
           setView({ name: 'today', pid })
