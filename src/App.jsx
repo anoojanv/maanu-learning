@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { LEARNERS, PLANS } from './data/curriculum.js'
-import { SKILL_BY_ID } from './data/skills.js'
+import { LEARNERS, PLANS, OLD_UNIT_ORDER } from './data/curriculum.js'
+import { SKILL_BY_ID, freeParams } from './data/skills.js'
 import { applyResult } from './lib/mastery.js'
 import { load, save, todayKey } from './lib/storage.js'
 import { setMuted, speak, sfx } from './lib/audio.js'
+import { supabase } from './lib/supabase.js'
+import { loadState, saveState, recordAnswer } from './lib/cloud.js'
+import { Auth } from './screens/Auth.jsx'
+import { Mascot } from './components/Mascot.jsx'
 import { Backdrop } from './components/Backdrop.jsx'
 import { Confetti, rain } from './components/Confetti.jsx'
 import { LearnerBar } from './components/LearnerBar.jsx'
@@ -14,12 +18,34 @@ import { Plan } from './screens/Plan.jsx'
 import { Practice } from './screens/Practice.jsx'
 import { Offscreen } from './screens/Offscreen.jsx'
 
-const fresh = () => ({ v: 1, muted: false, progress: {}, stars: {}, plans: {}, levels: {} })
+const fresh = () => ({ v: 2, muted: false, progress: {}, stars: {}, plans: {}, levels: {} })
 const blankPlan = () => ({ unit: 0, sessions: {}, today: { date: '', step: 0, completed: false } })
+const SAVE_DELAY = 1000
+
+/**
+ * Bring saved state up to date. Version 1 stored each child's unit as a
+ * position in the old, shorter plan; version 2 uses the larger catalog.
+ */
+function migrate(s) {
+  if (!s || (s.v !== 1 && s.v !== 2)) return fresh()
+  const st = { ...fresh(), ...s }
+  if (s.v === 1) {
+    const plans = { ...st.plans }
+    for (const l of LEARNERS) {
+      const p = plans[l.id]
+      if (!p) continue
+      const id = OLD_UNIT_ORDER[l.plan][p.unit]
+      const idx = PLANS[l.plan].units.findIndex((u) => u.id === id)
+      plans[l.id] = { ...p, unit: idx >= 0 ? idx : 0 }
+    }
+    st.plans = plans
+    st.v = 2
+  }
+  return st
+}
 
 function initial() {
-  const s = load()
-  const st = s && s.v === 1 ? { ...fresh(), ...s } : fresh()
+  const st = migrate(load())
   setMuted(st.muted)
   return st
 }
@@ -30,11 +56,73 @@ export default function App() {
   ref.current = state
   const [view, setView] = useState({ name: 'who' })
   const [news, setNews] = useState({})
+  const [session, setSession] = useState(undefined) // undefined while checking
+  const [synced, setSynced] = useState(false) // cloud state loaded for this session
+  const [syncNote, setSyncNote] = useState(null)
+  const saveTimer = useRef()
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s))
+    return () => data.subscription.unsubscribe()
+  }, [])
+
+  // On sign-in, load the family's saved progress. The first time, upload what
+  // this device already has so nothing the kids earned is lost.
+  const userId = session?.user?.id
+  useEffect(() => {
+    setSynced(false)
+    if (!userId) return
+    let live = true
+    loadState()
+      .then(async (remote) => {
+        if (!live) return
+        if (remote) {
+          const st = migrate(remote)
+          ref.current = st
+          setState(st)
+        } else {
+          await saveState(ref.current)
+        }
+        if (live) setSynced(true)
+      })
+      .catch(() => {
+        if (!live) return
+        setSyncNote('Could not reach the cloud. Progress is saved on this device for now.')
+        setSynced(true)
+      })
+    return () => { live = false }
+  }, [userId])
+
+  const flush = useCallback(() => {
+    clearTimeout(saveTimer.current)
+    return saveState(ref.current)
+      .then(() => setSyncNote(null))
+      .catch(() => {
+        setSyncNote('Not saved to the cloud yet. We’ll keep trying.')
+        saveTimer.current = setTimeout(flush, 5000)
+      })
+  }, [])
 
   useEffect(() => {
     save(state)
     setMuted(state.muted)
-  }, [state])
+    if (!userId || !synced) return
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(flush, SAVE_DELAY)
+  }, [state, userId, synced, flush])
+
+  useEffect(() => {
+    const onHide = () => document.visibilityState === 'hidden' && userId && synced && flush()
+    document.addEventListener('visibilitychange', onHide)
+    return () => document.removeEventListener('visibilitychange', onHide)
+  }, [userId, synced, flush])
+
+  const signOut = async () => {
+    await flush()
+    await supabase.auth.signOut()
+    setView({ name: 'who' })
+  }
 
   const commit = (fn) => {
     const ns = fn(ref.current)
@@ -62,6 +150,7 @@ export default function App() {
         stars: { ...s.stars, [pid]: (s.stars[pid] || 0) + (correct ? 1 : 0) + (firstMastery ? 10 : 0) },
       }
     })
+    recordAnswer(pid, skillId, correct, out.score)
     return out
   }, [])
 
@@ -114,12 +203,24 @@ export default function App() {
   const toggleMute = () => commit((s) => ({ ...s, muted: !s.muted }))
 
   let body
-  if (view.name === 'who' || !learner) {
+  if (session === undefined || (session && !synced)) {
+    body = (
+      <div className="screen loading">
+        <Mascot mood="wave" size={96} />
+        <p>Getting things ready…</p>
+      </div>
+    )
+  } else if (!session) {
+    body = <Auth />
+  } else if (view.name === 'who' || !learner) {
     body = (
       <Who
         learners={LEARNERS}
         stars={state.stars}
         plans={state.plans}
+        email={session.user.email}
+        note={syncNote}
+        onSignOut={signOut}
         onPick={(pid) => {
           sfx.tap()
           setView({ name: 'today', pid })
@@ -135,7 +236,7 @@ export default function App() {
         key={`${view.skillId}-${view.step ?? 'free'}-${view.run || 0}`}
         skill={skill}
         learner={learner}
-        params={s?.params}
+        params={guided ? s.params : freeParams(skill, state.levels[learner.id] || learner.level)}
         goal={s?.n}
         stepLabel={guided ? `Step ${view.step + 1} of 4 · ${unit.title}` : 'Free play'}
         entry={state.progress[learner.id]?.[skill.id]}

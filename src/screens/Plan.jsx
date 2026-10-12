@@ -1,6 +1,7 @@
 import React from 'react'
 import { SKILL_BY_ID } from '../data/skills.js'
 import { Ring } from '../components/Meter.jsx'
+import { WeekChart } from '../components/WeekChart.jsx'
 
 export function Plan({ learner, plan, unitIndex, sessions, progress, onSetUnit }) {
   const entries = Object.values(progress)
@@ -34,6 +35,8 @@ export function Plan({ learner, plan, unitIndex, sessions, progress, onSetUnit }
           ))}
         </dl>
       </header>
+
+      <WeekChart childId={learner.id} />
 
       <ol className="timeline">
         {plan.units.map((u, i) => {

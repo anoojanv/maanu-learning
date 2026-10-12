@@ -2,7 +2,7 @@ import React from 'react'
 import { Mascot } from '../components/Mascot.jsx'
 import { PLANS } from '../data/curriculum.js'
 
-export function Who({ learners, stars, plans, onPick }) {
+export function Who({ learners, stars, plans, onPick, email, note, onSignOut }) {
   return (
     <div className="screen who">
       <header className="who__hero">
@@ -28,6 +28,11 @@ export function Who({ learners, stars, plans, onPick }) {
           )
         })}
       </div>
+      <footer className="who__foot">
+        {note && <span className="save-chip" role="status">{note}</span>}
+        <span>Saved to {email}</span>
+        <button className="btn btn--sm" onClick={onSignOut}>Sign out</button>
+      </footer>
     </div>
   )
 }
