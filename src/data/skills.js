@@ -1,11 +1,16 @@
 import { rint, pick, shuffle, sample, numberChoices } from '../lib/random.js'
 import { LETTERS, LETTER_NAMES, PICTURES, SAME_SOUND, MIRRORS } from './letters.js'
 import { SIGHT_WORDS, wordsUpTo } from './words.js'
-import { COINS, COIN_KINDS } from './coins.js'
+import { COINS, COIN_KINDS, money } from './coins.js'
+import { CVC, RHYMES, GROUPS } from './pictures.js'
 
 export const LEVELS = [
+  { id: 'prek', name: 'Pre-K', long: 'Preschool' },
   { id: 'jk', name: 'JK', long: 'Junior Kindergarten' },
+  { id: 'sk', name: 'SK', long: 'Senior Kindergarten' },
   { id: 'g1', name: 'Grade 1', long: 'Grade 1' },
+  { id: 'g2', name: 'Grade 2', long: 'Grade 2' },
+  { id: 'g3', name: 'Grade 3', long: 'Grade 3' },
 ]
 
 export const SUBJECTS = {
@@ -15,6 +20,12 @@ export const SUBJECTS = {
   money: { name: 'Money', tone: 'yellow' },
   reading: { name: 'Reading', tone: 'green' },
   stories: { name: 'Story problems', tone: 'clay' },
+  shapes: { name: 'Shapes and patterns', tone: 'green' },
+  thinking: { name: 'Thinking and sorting', tone: 'yellow' },
+  measure: { name: 'Measuring and graphs', tone: 'green' },
+  time: { name: 'Time', tone: 'yellow' },
+  multiply: { name: 'Multiplying and sharing', tone: 'clay' },
+  fractions: { name: 'Fractions', tone: 'red' },
 }
 
 const THINGS = ['🍎', '⭐', '🐞', '🌼', '🚗', '🐟', '🧁', '🦆', '🍓', '🎈', '🦋', '🍁']
@@ -30,10 +41,54 @@ function letterSet(params, wrongCount) {
   return { target, wrong: sample(wrong, wrongCount) }
 }
 
+// Story problems take place in each child's own world.
+const STORIES = {
+  diamond: [
+    { add: (w, a, b) => ({ e: '⚾', s: `${w} hit ${a} balls at batting practice, then ${b} more. How many balls did ${w} hit?` }),
+      sub: (w, a, b) => ({ e: '⚾', s: `There were ${a} baseballs in the bucket. The coach took out ${b}. How many are left?` }) },
+    { add: (w, a, b) => ({ e: '🧢', s: `The team scored ${a} runs in the first game and ${b} runs in the second. How many runs in all?` }),
+      sub: (w, a, b) => ({ e: '🌭', s: `The snack stand had ${a} hot dogs. Fans bought ${b}. How many are left?` }) },
+  ],
+  garden: [
+    { add: (w, a, b) => ({ e: '🌱', s: `${w} planted ${a} seeds, then ${b} more. How many seeds did ${w} plant?` }),
+      sub: (w, a, b) => ({ e: '🦋', s: `There were ${a} butterflies in the garden. ${b} flew away. How many are still there?` }) },
+    { add: (w, a, b) => ({ e: '🐝', s: `${a} bees visited the sunflowers and ${b} bees visited the roses. How many bees in all?` }),
+      sub: (w, a, b) => ({ e: '🍓', s: `${w} picked ${a} strawberries and ate ${b}. How many are left?` }) },
+  ],
+  space: [
+    { add: (w, a, b) => ({ e: '🚀', s: `${w}’s rocket flew past ${a} stars, then ${b} more. How many stars did it pass?` }),
+      sub: (w, a, b) => ({ e: '🧑‍🚀', s: `There were ${a} astronauts on the space station. ${b} flew home. How many are still there?` }) },
+    { add: (w, a, b) => ({ e: '🪐', s: `${w} counted ${a} moons around one planet and ${b} around another. How many moons in all?` }),
+      sub: (w, a, b) => ({ e: '☄️', s: `The rocket had ${a} litres of fuel and used ${b}. How much fuel is left?` }) },
+  ],
+}
+
+/** Worked rows for adding or subtracting by place value. */
+function splitRows(a, b, sub) {
+  const ans = sub ? a - b : a + b
+  if (sub) return [`${a} − ${b}`, `Count back to ${a} − ${b - (b % 10)} = ${a - (b - (b % 10))}`, `Then back ${b % 10} more: ${ans}`]
+  const big = (n) => n - (n % 10)
+  return [`${a} + ${b}`, `Big parts: ${big(a)} + ${big(b)} = ${big(a) + big(b)}`, `Ones: ${a % 10} + ${b % 10} = ${(a % 10) + (b % 10)}`, `${big(a) + big(b)} + ${(a % 10) + (b % 10)} = ${ans}`]
+}
+
+export const SHAPES = {
+  circle: { name: 'circle', fact: 'A circle is round. It has no corners.' },
+  square: { name: 'square', fact: 'A square has 4 sides that are all the same.' },
+  triangle: { name: 'triangle', fact: 'A triangle has 3 sides and 3 corners.' },
+  rectangle: { name: 'rectangle', fact: 'A rectangle has 4 sides: 2 long and 2 short.' },
+  star: { name: 'star', fact: 'A star has 5 points.' },
+  heart: { name: 'heart', fact: 'A heart is round on top and pointy on the bottom.' },
+  hexagon: { name: 'hexagon', fact: 'A hexagon has 6 sides, like a honeycomb.' },
+  oval: { name: 'oval', fact: 'An oval is like a stretched circle, like an egg.' },
+}
+const SHAPE_KINDS = Object.keys(SHAPES)
+
+const FRACTION_WORDS = { 2: ['half', 'halves'], 3: ['third', 'thirds'], 4: ['fourth', 'fourths'], 6: ['sixth', 'sixths'], 8: ['eighth', 'eighths'] }
+
 export const SKILLS = [
-  // ───────── JK ─────────
+  // ───────── Pre-K to SK ─────────
   {
-    id: 'letter-pop', level: 'jk', subject: 'letters', icon: '🎈',
+    id: 'letter-pop', levels: ['prek', 'jk', 'sk'], subject: 'letters', icon: '🎈',
     title: 'Pop the letter', desc: 'Hear a letter, pop its balloon',
     generate({ score, params }) {
       const little = params?.little || (score >= 60 && Math.random() < 0.5)
@@ -53,7 +108,7 @@ export const SKILLS = [
     },
   },
   {
-    id: 'big-little', level: 'jk', subject: 'letters', icon: '🔠',
+    id: 'big-little', levels: ['prek', 'jk', 'sk'], subject: 'letters', icon: '🔠',
     title: 'Big and little', desc: 'Match capital and lowercase letters',
     generate({ score, params }) {
       const flip = score >= 50 && Math.random() < 0.5
@@ -73,7 +128,7 @@ export const SKILLS = [
     },
   },
   {
-    id: 'first-sound', level: 'jk', subject: 'letters', icon: '🐸',
+    id: 'first-sound', levels: ['jk', 'sk'], subject: 'letters', icon: '🐸',
     title: 'First sounds', desc: 'Which letter does the word start with?',
     generate({ score, params }) {
       const allowed = params?.letters ? params.letters.split('') : LETTERS
@@ -97,7 +152,7 @@ export const SKILLS = [
     },
   },
   {
-    id: 'count', level: 'jk', subject: 'counting', icon: '🐞',
+    id: 'count', levels: ['prek', 'jk', 'sk'], byLevel: { prek: { max: 5 }, sk: { max: 20 } }, subject: 'counting', icon: '🐞',
     title: 'How many?', desc: 'Count the things and pick the number',
     generate({ score, params }) {
       const max = params?.max || 10
@@ -116,7 +171,7 @@ export const SKILLS = [
     },
   },
   {
-    id: 'more-fewer', level: 'jk', subject: 'counting', icon: '⚖️',
+    id: 'more-fewer', levels: ['prek', 'jk', 'sk'], byLevel: { prek: { max: 5 } }, subject: 'counting', icon: '⚖️',
     title: 'More or fewer', desc: 'Which group has more?',
     generate({ score, params }) {
       const max = params?.max || 9
@@ -147,9 +202,9 @@ export const SKILLS = [
     },
   },
 
-  // ───────── Grade 1 ─────────
+  // ───────── Grade 1 and up ─────────
   {
-    id: 'ten-frame', level: 'g1', subject: 'math', icon: '🔟',
+    id: 'ten-frame', levels: ['sk', 'g1'], subject: 'math', icon: '🔟',
     title: 'Ten-frame adding', desc: 'Add two groups of dots up to 10',
     generate({ score, params }) {
       const max = params?.max || 10
@@ -165,7 +220,7 @@ export const SKILLS = [
     },
   },
   {
-    id: 'add-sub-20', level: 'g1', subject: 'math', icon: '🐸',
+    id: 'add-sub-20', levels: ['g1', 'g2'], subject: 'math', icon: '🐸',
     title: 'Add and take away', desc: 'Number sentences up to 20',
     generate({ score, params }) {
       const ops = params?.ops || '+-'
@@ -183,7 +238,7 @@ export const SKILLS = [
     },
   },
   {
-    id: 'tens-ones', level: 'g1', subject: 'math', icon: '🧱',
+    id: 'tens-ones', levels: ['g1', 'g2'], subject: 'math', icon: '🧱',
     title: 'Tens and ones', desc: 'Read numbers built from blocks',
     generate({ score, params }) {
       const max = params?.max || 99
@@ -199,7 +254,7 @@ export const SKILLS = [
     },
   },
   {
-    id: 'compare', level: 'g1', subject: 'math', icon: '🐊',
+    id: 'compare', levels: ['g1', 'g2', 'g3'], byLevel: { g3: { max: 999 } }, subject: 'math', icon: '🐊',
     title: 'Greater or less', desc: 'Compare numbers with < = >',
     generate({ score, params }) {
       const max = params?.max || (score < 50 ? 20 : 99)
@@ -227,7 +282,7 @@ export const SKILLS = [
     },
   },
   {
-    id: 'skip-count', level: 'g1', subject: 'math', icon: '🦘',
+    id: 'skip-count', levels: ['sk', 'g1', 'g2', 'g3'], byLevel: { sk: { steps: [10] }, g2: { steps: [2, 5, 10, 25] }, g3: { steps: [3, 4, 25, 100] } }, subject: 'math', icon: '🦘',
     title: 'Skip counting', desc: 'Count by 2s, 5s and 10s',
     generate({ score, params }) {
       const steps = params?.steps || (score < 40 ? [10, 5] : [2, 5, 10])
@@ -248,7 +303,7 @@ export const SKILLS = [
     },
   },
   {
-    id: 'coins', level: 'g1', subject: 'money', icon: '🪙',
+    id: 'coins', levels: ['sk', 'g1', 'g2', 'g3'], byLevel: { sk: { mode: 'identify' }, g2: { pool: ['loonie', 'quarter', 'dime', 'nickel'] }, g3: { pool: ['toonie', 'loonie', 'quarter', 'dime', 'nickel'] } }, subject: 'money', icon: '🪙',
     title: 'Canadian coins', desc: 'Name coins and count cents',
     generate({ score, params }) {
       const mode = params?.mode || 'mix'
@@ -266,14 +321,15 @@ export const SKILLS = [
         }
       }
       const pool = params?.pool || (score >= 50 ? ['quarter', 'dime', 'nickel'] : ['dime', 'nickel'])
+      const cap = pool.includes('toonie') ? 1000 : pool.includes('loonie') ? 500 : 100
       let coins, total
       do {
         coins = Array.from({ length: rint(2, score >= 50 ? 5 : 4) }, () => pick(pool))
         total = coins.reduce((t, k) => t + COINS[k].value, 0)
-      } while (total > 100)
+      } while (total > cap)
       coins.sort((x, y) => COINS[y].value - COINS[x].value)
       const set = new Set([total])
-      for (const d of shuffle([5, -5, 10, -10, 15])) {
+      for (const d of shuffle(total >= 100 ? [25, -25, 10, -10, 100, -100] : [5, -5, 10, -10, 15])) {
         if (set.size >= 4) break
         if (total + d > 0) set.add(total + d)
       }
@@ -281,14 +337,14 @@ export const SKILLS = [
         prompt: 'How much money is here?', say: 'How much money? Start with the biggest coin and count on.',
         visual: { kind: 'coins', coins },
         input: 'choice', choiceStyle: 'number',
-        choices: shuffle([...set]).map((v) => opt(v, `${v}¢`)),
-        answer: total, answerLabel: `${total}¢`,
+        choices: shuffle([...set]).map((v) => opt(v, money(v))),
+        answer: total, answerLabel: money(total),
         help: { kind: 'coinCount', coins, say: 'Start with the biggest coin, then count on.' },
       }
     },
   },
   {
-    id: 'sight-words', level: 'g1', subject: 'reading', icon: '📖',
+    id: 'sight-words', levels: ['sk', 'g1', 'g2', 'g3'], byLevel: { sk: { set: 1 }, g2: { set: 4 }, g3: { set: 5 } }, subject: 'reading', icon: '📖',
     title: 'Sight words', desc: 'Hear a word and find it',
     generate({ score, params }) {
       const list = params?.set ? SIGHT_WORDS[params.set] : wordsUpTo(3)
@@ -308,42 +364,387 @@ export const SKILLS = [
     },
   },
   {
-    id: 'baseball', level: 'g1', subject: 'stories', icon: '⚾',
-    title: 'Baseball math', desc: 'Story problems from the ballpark',
-    generate({ score, name, params }) {
+    id: 'story', levels: ['g1', 'g2', 'g3'], byLevel: { g2: { max: 100 }, g3: { max: 1000 } },
+    subject: 'stories', icon: '📚',
+    title: 'Story problems', desc: 'Word problems from your own world',
+    generate({ score, name, theme, params }) {
       const who = name || 'Sam'
+      const max = params?.max || 20
       const ops = params?.ops || '+-'
       const sub = ops === '-' || (ops.includes('-') && score >= 30 && Math.random() < 0.5)
-      let a, b, ans, t
+      const small = max <= 20
+      let a, b, ans
       if (!sub) {
-        a = rint(1, 6); b = rint(1, 6); ans = a + b
-        t = pick([
-          { e: '⚾', s: `${who} hit ${a} balls at batting practice, then ${b} more. How many balls did ${who} hit?` },
-          { e: '⚾', s: `The team scored ${a} runs in the first inning and ${b} runs in the second. How many runs in all?` },
-          { e: '🧢', s: `${a} players ran onto the field. Then ${b} more ran out. How many players are on the field?` },
-        ])
+        if (small) { a = rint(1, 6); b = rint(1, 6) }
+        else { a = rint(Math.floor(max / 10), Math.floor(max / 2)); b = rint(Math.floor(max / 20) || 1, max - a - 1) }
+        ans = a + b
       } else {
-        a = rint(4, 12); b = rint(1, a - 1); ans = a - b
-        t = pick([
-          { e: '⚾', s: `There were ${a} baseballs in the bucket. The coach took out ${b}. How many are left?` },
-          { e: '🃏', s: `${who} had ${a} baseball cards and gave ${b} to a friend. How many cards are left?` },
-          { e: '🌭', s: `The snack stand had ${a} hot dogs. Fans bought ${b}. How many are left?` },
-        ])
+        if (small) { a = rint(4, 12); b = rint(1, a - 1) }
+        else { a = rint(Math.floor(max / 4), max - 1); b = rint(Math.floor(max / 20) || 1, a - 1) }
+        ans = a - b
       }
+      const t = pick(STORIES[theme] || STORIES.diamond)[sub ? 'sub' : 'add'](who, a, b)
       const eq = `${a} ${sub ? '−' : '+'} ${b} = ${ans}`
       return {
         prompt: t.s, say: t.s, long: true,
-        visual: { kind: 'story', a, b, sub, emoji: t.e },
-        input: 'choice', choiceStyle: 'number',
-        choices: numberChoices(ans, { min: 0, max: 20 }).map((v) => opt(v)),
+        visual: small ? { kind: 'story', a, b, sub, emoji: t.e } : { kind: 'storyIcon', emoji: t.e },
+        input: small ? 'choice' : 'keypad', choiceStyle: 'number',
+        choices: small ? numberChoices(ans, { min: 0, max: 20 }).map((v) => opt(v)) : undefined,
         answer: ans, answerLabel: String(ans),
-        help: { kind: 'story', a, b, sub, emoji: t.e, eq, say: `${a} ${sub ? 'take away' : 'plus'} ${b} is ${ans}.` },
+        help: small
+          ? { kind: 'story', a, b, sub, emoji: t.e, eq, say: `${a} ${sub ? 'take away' : 'plus'} ${b} is ${ans}.` }
+          : { kind: 'split', rows: splitRows(a, b, sub), say: `${a} ${sub ? 'take away' : 'plus'} ${b} is ${ans}.` },
+      }
+    },
+  },
+
+  // ───────── Shapes (Pre-K, JK, SK) ─────────
+  {
+    id: 'shapes', levels: ['prek', 'jk', 'sk'], subject: 'shapes', icon: '🔺',
+    title: 'Find the shape', desc: 'Circles, squares, triangles and more',
+    generate({ score, params }) {
+      const pool = params?.shapes || (score < 50 ? ['circle', 'square', 'triangle'] : SHAPE_KINDS)
+      const target = pick(pool)
+      const wrong = sample(SHAPE_KINDS.filter((k) => k !== target), score < 40 ? 2 : 3)
+      const tone = pick(['red', 'blue', 'green', 'yellow', 'clay'])
+      return {
+        prompt: `Find the ${SHAPES[target].name}`, say: `Find the ${SHAPES[target].name}`,
+        visual: { kind: 'listen', fallback: SHAPES[target].name },
+        input: 'choice', choiceStyle: 'shape',
+        choices: shuffle([target, ...wrong]).map((k) => ({ value: k, kind: 'shape', shape: k, tone, label: SHAPES[k].name })),
+        answer: target, answerLabel: `the ${SHAPES[target].name}`,
+        help: { kind: 'shape', shape: target, lines: [SHAPES[target].fact], say: `This is a ${SHAPES[target].name}. ${SHAPES[target].fact}` },
+      }
+    },
+  },
+
+  // ───────── Grade 2 and 3 ─────────
+  {
+    id: 'add-sub-100', levels: ['g2', 'g3'], byLevel: { g3: { max: 1000 } }, subject: 'math', icon: '🧮',
+    title: 'Big adding and taking away', desc: 'Add and subtract two- and three-digit numbers',
+    generate({ score, params }) {
+      const max = params?.max || 100
+      const ops = params?.ops || '+-'
+      const sub = ops === '-' || (ops.includes('-') && score >= 25 && Math.random() < 0.5)
+      // Low scores avoid regrouping (no carrying or borrowing); higher scores allow it.
+      const regroup = params?.regroup ?? score >= 50
+      let a, b
+      for (let i = 0; i < 40; i++) {
+        a = rint(Math.floor(max / 10), max - Math.floor(max / 10))
+        b = rint(Math.max(1, Math.floor(max / 50)), sub ? a - 1 : max - 1 - a)
+        const ones = sub ? a % 10 < b % 10 : (a % 10) + (b % 10) >= 10
+        if (b > 0 && (regroup || !ones)) break
+      }
+      const ans = sub ? a - b : a + b
+      return {
+        prompt: sub ? 'Take away' : 'Add', say: sub ? `${a} take away ${b}` : `${a} plus ${b}`,
+        visual: { kind: 'equation', text: `${a} ${sub ? '−' : '+'} ${b} = ?` },
+        input: 'keypad',
+        answer: ans, answerLabel: String(ans),
+        help: { kind: 'split', rows: splitRows(a, b, sub), say: `${a} ${sub ? 'take away' : 'plus'} ${b} is ${ans}.` },
+      }
+    },
+  },
+  {
+    id: 'place-value', levels: ['g2', 'g3'], subject: 'math', icon: '🏗️',
+    title: 'Hundreds, tens and ones', desc: 'Read numbers up to 999 from blocks',
+    generate({ score, params }) {
+      const max = params?.max || 999
+      const n = score < 40 ? rint(100, Math.min(299, max)) : rint(100, max)
+      const hundreds = Math.floor(n / 100), tens = Math.floor(n / 10) % 10, ones = n % 10
+      const askDigit = score >= 50 && Math.random() < 0.4
+      if (askDigit) {
+        const place = pick(['hundreds', 'tens', 'ones'])
+        const val = { hundreds, tens, ones }[place]
+        return {
+          prompt: `How many ${place} are in ${n}?`, say: `How many ${place} are in ${n}?`,
+          visual: { kind: 'equation', text: String(n) },
+          input: 'choice', choiceStyle: 'number',
+          choices: numberChoices(val, { min: 0, max: 9 }).map((v) => opt(v)),
+          answer: val, answerLabel: String(val),
+          help: { kind: 'blocks', hundreds, tens, ones, say: `${n} is ${hundreds} hundreds, ${tens} tens and ${ones} ones.` },
+        }
+      }
+      return {
+        prompt: 'What number do the blocks show?', say: 'What number is this? Count the hundreds, then the tens, then the ones.',
+        visual: { kind: 'blocks', hundreds, tens, ones },
+        input: 'keypad',
+        answer: n, answerLabel: String(n),
+        help: { kind: 'blocks', hundreds, tens, ones, say: `${hundreds} hundreds, ${tens} tens and ${ones} ones make ${n}.` },
+      }
+    },
+  },
+  {
+    id: 'times', levels: ['g2', 'g3'], byLevel: { g2: { max: 5 } }, subject: 'multiply', icon: '✖️',
+    title: 'Equal groups', desc: 'Rows and groups: the start of multiplying',
+    generate({ score, params }) {
+      const max = params?.max || 10
+      const rows = rint(2, score < 50 ? Math.min(5, max) : max)
+      const cols = rint(2, score < 50 ? Math.min(5, max) : max)
+      const ans = rows * cols
+      const emoji = pick(THINGS)
+      const showSign = score >= 40
+      return {
+        prompt: showSign ? `${rows} × ${cols} = ?` : `${rows} rows of ${cols}. How many in all?`,
+        say: showSign ? `${rows} times ${cols}` : `${rows} rows of ${cols}. How many in all?`,
+        visual: { kind: 'array', rows, cols, emoji },
+        input: 'keypad',
+        answer: ans, answerLabel: String(ans),
+        help: { kind: 'array', rows, cols, emoji, say: `Count by ${cols}s, ${rows} times: ${Array.from({ length: rows }, (_, i) => (i + 1) * cols).join(', ')}.` },
+      }
+    },
+  },
+  {
+    id: 'share', levels: ['g3'], subject: 'multiply', icon: '🍪',
+    title: 'Sharing equally', desc: 'Split things into equal groups',
+    generate({ score, name, params }) {
+      const groups = rint(2, score < 50 ? 4 : params?.max || 6)
+      const each = rint(1, score < 50 ? 5 : 9)
+      const total = groups * each
+      const thing = pick([['🍪', 'cookies'], ['🍓', 'strawberries'], ['🖍️', 'crayons'], ['⚽', 'balls']])
+      const s = `${name || 'Sam'} has ${total} ${thing[1]} to share with ${groups} friends. How many does each friend get?`
+      return {
+        prompt: s, say: s, long: true,
+        visual: { kind: 'count', emoji: thing[0], n: total },
+        input: 'keypad',
+        answer: each, answerLabel: String(each),
+        help: { kind: 'share', groups, each, emoji: thing[0], lines: [`${total} ÷ ${groups} = ${each}`, `${groups} × ${each} = ${total}`], say: `${total} shared by ${groups} is ${each} each.` },
+      }
+    },
+  },
+  {
+    id: 'fractions', levels: ['g2', 'g3'], byLevel: { g2: { max: 4 } }, subject: 'fractions', icon: '🍕',
+    title: 'Fractions', desc: 'How much of the shape is coloured?',
+    generate({ score, params }) {
+      const maxParts = params?.max || 8
+      const partsPool = params?.parts || [2, 3, 4, 6, 8].filter((p) => p <= maxParts)
+      const parts = pick(score < 40 ? partsPool.slice(0, 3) : partsPool)
+      const shaded = score < 50 ? 1 : rint(1, parts - 1)
+      const shape = pick(['pie', 'bar'])
+      const label = (k, p) => `${k}/${p}`
+      const set = new Set([label(shaded, parts)])
+      const tries = shuffle([
+        label(parts - shaded, parts), label(shaded, parts + 1 <= 8 ? parts + 1 : parts - 1), label(1, parts),
+        label(shaded, parts === 2 ? 4 : 2), label(Math.min(parts, shaded + 1), parts),
+      ])
+      for (const t of tries) { if (set.size >= 4) break; if (!t.startsWith('0/')) set.add(t) }
+      const words = FRACTION_WORDS[parts]
+      return {
+        prompt: 'What fraction is coloured?', say: 'What fraction of the shape is coloured?',
+        visual: { kind: 'fraction', parts, shaded, shape },
+        input: 'choice', choiceStyle: 'symbol',
+        choices: shuffle([...set]).map((v) => opt(v)),
+        answer: label(shaded, parts), answerLabel: label(shaded, parts),
+        help: {
+          kind: 'fraction', parts, shaded, shape, labelled: true,
+          lines: [`${parts} equal parts. ${shaded} coloured.`, `${shaded} ${shaded === 1 ? words[0] : words[1]} = ${shaded}/${parts}`],
+          say: `There are ${parts} equal parts and ${shaded} are coloured. That is ${shaded} ${shaded === 1 ? words[0] : words[1]}.`,
+        },
+      }
+    },
+  },
+  {
+    id: 'clock', levels: ['g1', 'g2', 'g3'], byLevel: { g1: { step: 30 }, g2: { step: 15 }, g3: { step: 5 } }, subject: 'time', icon: '🕒',
+    title: 'Tell the time', desc: 'Read an analog clock',
+    generate({ score, params }) {
+      const step = params?.step || (score < 40 ? 30 : score < 75 ? 15 : 5)
+      const h = rint(1, 12)
+      const m = step * rint(0, 60 / step - 1)
+      const fmt = (hh, mm) => `${hh}:${String(mm).padStart(2, '0')}`
+      const ans = fmt(h, m)
+      const set = new Set([ans])
+      const near = shuffle([
+        fmt(h === 12 ? 1 : h + 1, m), fmt(h, (m + 30) % 60), fmt(h === 1 ? 12 : h - 1, m),
+        fmt((m / 5) || 12, h * 5 === 60 ? 0 : h * 5), fmt(h, (m + step) % 60),
+      ])
+      for (const t of near) { if (set.size >= 4) break; set.add(t) }
+      return {
+        prompt: 'What time is it?', say: 'What time does the clock show?',
+        visual: { kind: 'clock', h, m },
+        input: 'choice', choiceStyle: 'symbol',
+        choices: shuffle([...set]).map((v) => opt(v)),
+        answer: ans, answerLabel: ans,
+        help: {
+          kind: 'clock', h, m,
+          lines: ['The short hand shows the hour.', m === 0 ? 'The long hand on 12 means o’clock.' : `The long hand counts minutes by 5s: ${m} minutes.`, `It is ${ans}.`],
+          say: m === 0 ? `It is ${h} o’clock.` : `It is ${h} ${m < 10 ? 'oh ' + m : m}.`,
+        },
+      }
+    },
+  },
+
+  // ───────── More skills for Maanu Learning ─────────
+  {
+    id: 'patterns', levels: ['prek', 'jk', 'sk', 'g1'], byLevel: { g1: { kinds: ['ABB', 'AAB', 'ABC', 'ABCD'] } }, subject: 'shapes', icon: '🔴',
+    title: 'What comes next?', desc: 'Finish the pattern',
+    generate({ score, params }) {
+      const kinds = params?.kinds || (score < 40 ? ['AB'] : score < 75 ? ['AB', 'AAB', 'ABB'] : ['AB', 'AAB', 'ABB', 'ABC'])
+      const kind = pick(kinds)
+      const set = pick([['🔴', '🔵', '🟡', '🟢'], ['🍎', '🍌', '🍇', '🍊'], ['⭐', '🌙', '☀️', '☁️'], ['🐶', '🐱', '🐭', '🐰'], ['🟥', '🟦', '🟨', '🟩']])
+      const palette = shuffle(set)
+      const letters = [...new Set(kind.split(''))]
+      const map = Object.fromEntries(letters.map((l, i) => [l, palette[i]]))
+      const unit = kind.split('').map((l) => map[l])
+      const len = unit.length * 2 + (score >= 50 ? 1 : 0) + 1
+      const items = Array.from({ length: len }, (_, i) => unit[i % unit.length])
+      const ans = items[len - 1]
+      const choices = shuffle([...new Set([ans, ...unit, ...sample(set, 2)])]).slice(0, 4)
+      if (!choices.includes(ans)) choices[0] = ans
+      return {
+        prompt: 'What comes next?', say: 'Look at the pattern. What comes next?',
+        visual: { kind: 'sequence', items, blank: len - 1 },
+        input: 'choice', choiceStyle: 'emoji',
+        choices: shuffle(choices).map((v) => opt(v)),
+        answer: ans, answerLabel: ans,
+        help: { kind: 'sequence', items, blank: len - 1, lines: [`The pattern repeats: ${unit.join(' ')}`], say: 'The pattern repeats over and over.' },
+      }
+    },
+  },
+  {
+    id: 'odd-one-out', levels: ['prek', 'jk', 'sk'], subject: 'thinking', icon: '🧺',
+    title: 'Which one does not belong?', desc: 'Find the one that is different',
+    generate({ score }) {
+      const [g, other] = sample(GROUPS, 2)
+      const same = sample(g.items, score < 50 ? 2 : 3)
+      const odd = pick(other.items)
+      return {
+        prompt: 'Which one does not belong?', say: 'Which one does not belong?',
+        visual: { kind: 'none' },
+        input: 'choice', choiceStyle: 'emoji',
+        choices: shuffle([...same, odd]).map((v) => opt(v)),
+        answer: odd, answerLabel: odd,
+        help: { kind: 'none', lines: [`${same.join(' ')} are all ${g.name}.`, `${odd} is not.`], say: `These are all ${g.name}. This one is not.` },
+      }
+    },
+  },
+  {
+    id: 'rhyme', levels: ['jk', 'sk', 'g1'], subject: 'letters', icon: '🎵',
+    title: 'Rhyme time', desc: 'Find the picture that rhymes',
+    generate({ score }) {
+      const group = pick(RHYMES)
+      const [target, match] = sample(group, 2)
+      const others = sample(RHYMES.filter((g) => g !== group), score < 50 ? 2 : 3).map((g) => pick(g))
+      const q = `Which one rhymes with ${target.w}?`
+      return {
+        prompt: q, say: q,
+        visual: { kind: 'picture', emoji: target.e, word: target.w },
+        input: 'choice', choiceStyle: 'emoji',
+        choices: shuffle([match, ...others]).map((p) => ({ value: p.w, label: p.e, sub: p.w })),
+        answer: match.w, answerLabel: `${match.e} ${match.w}`,
+        help: { kind: 'none', lines: [`${target.e} ${target.w}  ·  ${match.e} ${match.w}`, 'They sound the same at the end.'], say: `${target.w}, ${match.w}. They rhyme!` },
+      }
+    },
+  },
+  {
+    id: 'read-words', levels: ['sk', 'g1'], subject: 'reading', icon: '🔤',
+    title: 'Read the word', desc: 'Sound it out and find the picture',
+    generate({ score }) {
+      const [word, ...wrong] = sample(CVC, score < 50 ? 3 : 4)
+      // Close distractors: words that share a letter with the target are harder.
+      return {
+        prompt: 'Read the word. Tap its picture.', say: 'Sound out the word. Then tap its picture.',
+        visual: { kind: 'bigLetter', text: word.w },
+        input: 'choice', choiceStyle: 'emoji',
+        choices: shuffle([word, ...wrong]).map((p) => ({ value: p.w, label: p.e })),
+        answer: word.w, answerLabel: `${word.e} ${word.w}`,
+        help: { kind: 'spell', word: word.w, lines: [`${word.w.split('').join(' – ')} … ${word.w} ${word.e}`], say: `${word.w.split('').join(', ')}. ${word.w}.` },
+      }
+    },
+  },
+  {
+    id: 'make-10', levels: ['sk', 'g1'], byLevel: { sk: { total: 5 } }, subject: 'math', icon: '🧩',
+    title: 'Make 10', desc: 'How many more to fill the ten frame?',
+    generate({ score, params }) {
+      const total = params?.total || (score < 30 ? 5 : 10)
+      const a = rint(1, total - 1), b = total - a
+      return {
+        prompt: `${a} and how many more make ${total}?`, say: `${a} and how many more make ${total}?`,
+        visual: { kind: 'tenFrame', a, b: 0, eq: `${a} + ? = ${total}` },
+        input: 'keypad',
+        answer: b, answerLabel: String(b),
+        help: { kind: 'tenFrameCount', a, b, say: `${a} and ${b} make ${total}.` },
+      }
+    },
+  },
+  {
+    id: 'measure', levels: ['sk', 'g1'], subject: 'measure', icon: '📏',
+    title: 'Measure it', desc: 'How many cubes long?',
+    generate({ score }) {
+      const things = shuffle([['✏️', 'pencil'], ['🥖', 'bread'], ['🐍', 'snake'], ['🖍️', 'crayon'], ['🥕', 'carrot'], ['🐛', 'caterpillar']])
+      const compare = score >= 50 && Math.random() < 0.5
+      if (!compare) {
+        const len = rint(2, score < 40 ? 6 : 10)
+        const [e, n] = things[0]
+        return {
+          prompt: `How many cubes long is the ${n}?`, say: `How many cubes long is the ${n}?`,
+          visual: { kind: 'measure', rows: [{ e, len }] },
+          input: 'choice', choiceStyle: 'number',
+          choices: numberChoices(len, { min: 1, max: 12 }).map((v) => opt(v)),
+          answer: len, answerLabel: String(len),
+          help: { kind: 'measure', rows: [{ e, len }], numbered: true, say: `The ${n} is ${len} cubes long.` },
+        }
+      }
+      const a = rint(3, 10)
+      let b = a
+      while (b === a) b = rint(2, 10)
+      const [[e1, n1], [e2, n2]] = things
+      const longer = a > b ? n1 : n2
+      return {
+        prompt: `How many cubes longer is the ${longer}?`, say: `How many cubes longer is the ${longer}?`,
+        visual: { kind: 'measure', rows: [{ e: e1, len: a }, { e: e2, len: b }] },
+        input: 'choice', choiceStyle: 'number',
+        choices: numberChoices(Math.abs(a - b), { min: 1, max: 9 }).map((v) => opt(v)),
+        answer: Math.abs(a - b), answerLabel: String(Math.abs(a - b)),
+        help: { kind: 'measure', rows: [{ e: e1, len: a }, { e: e2, len: b }], numbered: true, lines: [`${Math.max(a, b)} − ${Math.min(a, b)} = ${Math.abs(a - b)}`], say: `${Math.max(a, b)} take away ${Math.min(a, b)} is ${Math.abs(a - b)}.` },
+      }
+    },
+  },
+  {
+    id: 'graphs', levels: ['g1', 'g2'], subject: 'measure', icon: '📊',
+    title: 'Picture graphs', desc: 'Read a graph and answer',
+    generate({ score }) {
+      const cats = sample([['🍎', 'apples'], ['🍌', 'bananas'], ['🍇', 'grapes'], ['🍓', 'strawberries'], ['🍊', 'oranges']], score < 50 ? 3 : 4)
+      let counts
+      do { counts = cats.map(() => rint(1, 8)) } while (new Set(counts).size < counts.length)
+      const rows = cats.map(([e, n], i) => ({ e, n, count: counts[i] }))
+      const mode = score < 30 ? 'count' : pick(score < 60 ? ['count', 'most'] : ['count', 'most', 'fewest', 'diff'])
+      const hi = rows.reduce((m, r) => (r.count > m.count ? r : m))
+      const lo = rows.reduce((m, r) => (r.count < m.count ? r : m))
+      let q, ans, choices, label, lines
+      if (mode === 'count') {
+        const r = pick(rows)
+        q = `How many ${r.n} did the class pick?`; ans = r.count; label = String(ans)
+        choices = numberChoices(ans, { min: 1, max: 10 }).map((v) => opt(v))
+        lines = [`Count the ${r.e} in the ${r.n} row: ${ans}.`]
+      } else if (mode === 'most' || mode === 'fewest') {
+        const r = mode === 'most' ? hi : lo
+        q = `Which fruit did the class pick ${mode === 'most' ? 'the most' : 'the fewest'}?`; ans = r.e; label = `${r.e} ${r.n}`
+        choices = rows.map((x) => ({ value: x.e, label: x.e, sub: x.n }))
+        lines = [`${r.n} has the ${mode === 'most' ? 'longest' : 'shortest'} row: ${r.count}.`]
+      } else {
+        q = `How many more ${hi.n} than ${lo.n}?`; ans = hi.count - lo.count; label = String(ans)
+        choices = numberChoices(ans, { min: 1, max: 9 }).map((v) => opt(v))
+        lines = [`${hi.count} − ${lo.count} = ${ans}`]
+      }
+      return {
+        prompt: q, say: q, long: true,
+        visual: { kind: 'graph', rows },
+        input: 'choice', choiceStyle: mode === 'most' || mode === 'fewest' ? 'emoji' : 'number',
+        choices,
+        answer: ans, answerLabel: label,
+        help: { kind: 'graph', rows, lines, say: lines[0] },
       }
     },
   },
 ]
 
 export const SKILL_BY_ID = Object.fromEntries(SKILLS.map((s) => [s.id, s]))
+
+/** Skills for a level, for free play. */
+export const skillsFor = (level) => SKILLS.filter((s) => s.levels.includes(level))
+
+/** Free-play settings for a skill at a level, e.g. bigger numbers in Grade 3. */
+export const freeParams = (skill, level) => skill.byLevel?.[level]
 
 let qid = 0
 /** Build a question, avoiding an exact repeat of the previous one. */
